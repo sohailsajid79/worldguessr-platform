@@ -1,0 +1,22 @@
+# upstream app source code
+upstream/
+
+# secrets & local env
+.env
+*.tfvars
+!*.example.tfvars
+
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+
+# node / build artifacts
+node_modules/
+out/
+.next*/
+
+# ansible
+*.retry
+ansible/vault-password.txt
