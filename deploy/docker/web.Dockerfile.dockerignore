@@ -1,0 +1,9 @@
+.git
+node_modules
+mobile
+!mobile/package.json
+.next
+out
+docs
+data
+mapgens
