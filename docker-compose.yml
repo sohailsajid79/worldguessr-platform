@@ -1,0 +1,129 @@
+name: worldguessr
+
+services:
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ./upstream
+      dockerfile: ../deploy/docker/backend.Dockerfile
+      target: api
+    environment:
+      NODE_ENV: production
+      MONGODB: mongodb://mongo:27017/worldguessr
+      REDIS_URI: redis://redis:6379
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    ports:
+      - "3001:3001"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(3001,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  auth:
+    build:
+      context: ./upstream
+      dockerfile: ../deploy/docker/backend.Dockerfile
+      target: auth
+    environment:
+      NODE_ENV: production
+      MONGODB: mongodb://mongo:27017/worldguessr
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    ports:
+      - "3004:3004"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(3004,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  ws:
+    build:
+      context: ./upstream
+      dockerfile: ../deploy/docker/backend.Dockerfile
+      target: ws
+    environment:
+      NODE_ENV: production
+      MONGODB: mongodb://mongo:27017/worldguessr
+      REDIS_URI: redis://redis:6379
+    ports:
+      - "3002:3002"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(3002,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  cron:
+    build:
+      context: ./upstream
+      dockerfile: ../deploy/docker/backend.Dockerfile
+      target: cron
+    environment:
+      NODE_ENV: production
+      MONGODB: mongodb://mongo:27017/worldguessr
+      REDIS_URI: redis://redis:6379
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(3003,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+    build:
+      context: ./upstream
+      dockerfile: ../deploy/docker/web.Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - api
+      - ws
+      - auth
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  mongo-data:
