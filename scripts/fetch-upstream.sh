@@ -12,14 +12,4 @@ fi
 git -C "$DEST" fetch origin "$UPSTREAM_REF"
 git -C "$DEST" checkout --force "$UPSTREAM_REF"
 
-cat > "$DEST/.dockerignore" << 'EOF'
-.git
-node_modules
-mobile
-!mobile/package.json
-.next
-out
-docs
-EOF
-
 echo "upstream ready at $DEST @ $(git -C "$DEST" rev-parse --short HEAD)"
