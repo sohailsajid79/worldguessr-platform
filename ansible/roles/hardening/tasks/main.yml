@@ -1,0 +1,56 @@
+- name: Allow passwordless sudo for the automation user
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/010_ansible-nopasswd
+    content: "{{ ansible_user }} ALL=(ALL) NOPASSWD: ALL\n"
+    mode: "0440"
+    validate: visudo -cf %s
+
+- name: Disable SSH password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PasswordAuthentication'
+    line: PasswordAuthentication no
+    validate: sshd -t -f %s
+  notify: Restart ssh
+
+- name: Update apt cache and upgrade packages
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    upgrade: safe
+
+- name: Install baseline packages
+  ansible.builtin.apt:
+    name:
+      - ufw
+      - fail2ban
+      - unattended-upgrades
+      - git
+      - curl
+      - ca-certificates
+    state: present
+
+- name: Allow SSH through the firewall
+  community.general.ufw:
+    rule: allow
+    name: OpenSSH
+
+- name: Enable firewall, default-deny incoming
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+- name: Enable unattended security upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    mode: "0644"
+
+- name: Ensure fail2ban is running and enabled
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true
