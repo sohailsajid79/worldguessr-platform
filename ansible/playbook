@@ -1,0 +1,6 @@
+- name: Configure CI runner
+  hosts: runners
+  become: true
+  roles:
+    - hardening
+    - docker
