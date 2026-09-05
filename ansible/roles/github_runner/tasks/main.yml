@@ -1,0 +1,111 @@
+- name: Create runner user with docker access
+  ansible.builtin.user:
+    name: "{{ runner_user }}"
+    groups: docker
+    append: true
+    shell: /bin/bash
+
+- name: Create runner directory
+  ansible.builtin.file:
+    path: "{{ runner_dir }}"
+    state: directory
+    owner: "{{ runner_user }}"
+    group: "{{ runner_user }}"
+    mode: "0755"
+
+- name: Download runner tarball (pinned + checksummed)
+  ansible.builtin.get_url:
+    url: "https://github.com/actions/runner/releases/download/v{{ runner_version }}/actions-runner-linux-arm64-{{ runner_version }}.tar.gz"
+    dest: "{{ runner_dir }}/runner.tar.gz"
+    checksum: "sha256:{{ runner_sha256 }}"
+    owner: "{{ runner_user }}"
+
+- name: Unpack runner
+  ansible.builtin.unarchive:
+    src: "{{ runner_dir }}/runner.tar.gz"
+    dest: "{{ runner_dir }}"
+    remote_src: true
+    owner: "{{ runner_user }}"
+    creates: "{{ runner_dir }}/config.sh"
+
+- name: Install runner OS dependencies (vendor script, marker-guarded)
+  ansible.builtin.command:
+    cmd: sh -c "./bin/installdependencies.sh && touch .deps-installed"
+    chdir: "{{ runner_dir }}"
+    creates: "{{ runner_dir }}/.deps-installed"
+
+- name: Check whether runner is already configured
+  ansible.builtin.stat:
+    path: "{{ runner_dir }}/.runner"
+  register: runner_state
+
+- name: Fetch a fresh registration token
+  ansible.builtin.uri:
+    url: "https://api.github.com/repos/{{ gh_owner }}/{{ gh_repo }}/actions/runners/registration-token"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ gh_pat }}"
+      Accept: application/vnd.github+json
+    status_code: 201
+  register: reg
+  when: not runner_state.stat.exists
+  no_log: true
+
+- name: Register runner with GitHub
+  ansible.builtin.command:
+    cmd: >
+      ./config.sh --unattended --replace
+      --url https://github.com/{{ gh_owner }}/{{ gh_repo }}
+      --token {{ reg.json.token }}
+      --name {{ runner_name }}
+      --labels {{ runner_labels }}
+    chdir: "{{ runner_dir }}"
+  become_user: "{{ runner_user }}"
+  when: not runner_state.stat.exists
+  no_log: true
+
+- name: Install runner as a systemd service
+  ansible.builtin.command:
+    cmd: "./svc.sh install {{ runner_user }}"
+    chdir: "{{ runner_dir }}"
+    creates: "/etc/systemd/system/actions.runner.{{ gh_owner }}-{{ gh_repo }}.{{ runner_name }}.service"
+
+- name: Create drop-in directory for runner service overrides
+  ansible.builtin.file:
+    path: "/etc/systemd/system/actions.runner.{{ gh_owner }}-{{ gh_repo }}.{{ runner_name }}.service.d"
+    state: directory
+    mode: "0755"
+
+- name: Add restart policy override for runner service
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/actions.runner.{{ gh_owner }}-{{ gh_repo }}.{{ runner_name }}.service.d/override.conf"
+    content: |
+      [Service]
+      Restart=always
+      RestartSec=10
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Apply unit changes before starting the service
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure runner service is running and enabled
+  ansible.builtin.service:
+    name: "actions.runner.{{ gh_owner }}-{{ gh_repo }}.{{ runner_name }}.service"
+    state: started
+    enabled: true
+
+- name: Wait until GitHub reports the runner online
+  ansible.builtin.uri:
+    url: "https://api.github.com/repos/{{ gh_owner }}/{{ gh_repo }}/actions/runners"
+    headers:
+      Authorization: "Bearer {{ gh_pat }}"
+      Accept: application/vnd.github+json
+  register: runners_api
+  until: >-
+    runners_api.json.runners
+    | selectattr('name', 'equalto', runner_name)
+    | map(attribute='status') | first | default('missing') == 'online'
+  retries: 12
+  delay: 5
+  no_log: true

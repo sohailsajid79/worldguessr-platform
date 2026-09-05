@@ -1,0 +1,9 @@
+gh_owner: sohailsajid79
+gh_repo: worldguessr-platform
+gh_pat: "{{ vault_gh_pat }}"
+runner_user: runner
+runner_dir: /home/runner/actions-runner
+runner_name: runner-pi
+runner_labels: "arm64,pi"
+runner_version: "2.337.0"
+runner_sha256: "9b1dc70626422526e3c94767cf024896beb15da5342a3f4819bf2feac13e0393"

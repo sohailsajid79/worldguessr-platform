@@ -2,5 +2,9 @@
   hosts: runners
   become: true
   roles:
-    - hardening
-    - docker
+    - role: hardening
+      tags: [hardening]
+    - role: docker
+      tags: [docker]
+    - role: github_runner
+      tags: [runner]
