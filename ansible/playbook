@@ -8,3 +8,5 @@
       tags: [docker]
     - role: github_runner
       tags: [runner]
+    - role: azure_cli
+      tags: [azure_cli]
