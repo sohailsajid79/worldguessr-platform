@@ -11,3 +11,8 @@ variable "location" {
   type    = string
   default = "uksouth"
 }
+
+variable "github_repo" {
+  type    = string
+  default = "sohailsajid79/worldguessr-platform"
+}
