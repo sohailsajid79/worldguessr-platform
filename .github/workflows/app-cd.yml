@@ -1,0 +1,59 @@
+name: app-cd
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - deploy/**
+      - scripts/fetch-upstream.sh
+      - .github/workflows/app-cd.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: app-cd
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}
+
+jobs:
+  build-push:
+    runs-on: [self-hosted, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch upstream at pinned commit
+        run: ./scripts/fetch-upstream.sh
+
+      - name: Log in to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to ACR
+        run: az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Build and push backend images
+        run: |
+          for target in api auth ws cron; do
+            docker build -f deploy/docker/backend.Dockerfile --target "$target" \
+              -t "$REGISTRY/worldguessr-$target:${{ github.sha }}" \
+              -t "$REGISTRY/worldguessr-$target:latest" upstream/
+            docker push --all-tags "$REGISTRY/worldguessr-$target"
+          done
+
+      - name: Build and push web image
+        run: |
+          docker build -f deploy/docker/web.Dockerfile \
+            --build-arg NEXT_PUBLIC_API_URL=api.guessr.sohailsajid.com \
+            --build-arg NEXT_PUBLIC_AUTH_URL=auth.guessr.sohailsajid.com \
+            --build-arg NEXT_PUBLIC_WS_HOST=ws.guessr.sohailsajid.com \
+            -t "$REGISTRY/worldguessr-web:${{ github.sha }}" \
+            -t "$REGISTRY/worldguessr-web:latest" upstream/
+          docker push --all-tags "$REGISTRY/worldguessr-web"
