@@ -1,3 +1,9 @@
+locals {
+  gh_owner        = split("/", var.github_repo)[0]
+  gh_repo         = split("/", var.github_repo)[1]
+  gh_subject_main = "repo:${local.gh_owner}@${var.github_owner_id}/${local.gh_repo}@${var.github_repo_id}:ref:refs/heads/main"
+}
+
 data "azuread_client_config" "current" {}
 data "azurerm_client_config" "current" {}
 
@@ -17,7 +23,7 @@ resource "azuread_application_federated_identity_credential" "fic" {
   description    = "GitHub Actions, main branch"
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = "repo:${var.github_repo}:ref:refs/heads/main"
+  subject        = local.gh_subject_main
 }
 
 resource "azurerm_role_assignment" "github_acr_push" {

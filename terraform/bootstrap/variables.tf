@@ -16,3 +16,13 @@ variable "github_repo" {
   type    = string
   default = "sohailsajid79/worldguessr-platform"
 }
+
+variable "github_owner_id" {
+  type    = string
+  default = "104785828"
+}
+
+variable "github_repo_id" {
+  type    = string
+  default = "1327485337"
+}
