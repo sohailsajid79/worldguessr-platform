@@ -6,10 +6,11 @@
 
 - name: Add Azure CLI apt repository
   ansible.builtin.apt_repository:
+    # Pinned to bookworm: the Pi runs trixie Debian, and Microsoft hasn't published
+    # a trixie index for this repo yet.
     repo: >-
       deb [arch=arm64 signed-by=/etc/apt/keyrings/microsoft.asc]
-      https://packages.microsoft.com/repos/azure-cli/
-      {{ ansible_facts['distribution_release'] }} main
+      https://packages.microsoft.com/repos/azure-cli/ bookworm main
     filename: azure-cli
     state: present
 
